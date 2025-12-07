@@ -7,7 +7,7 @@ extern crate rayon;
 mod rayon;
 
 use std::{
-    fs::{File, Metadata, OpenOptions},
+    fs::{File, Metadata},
     io::{BufWriter, Read, Write, stdin, stdout},
     path::Path,
     sync::{
@@ -21,6 +21,7 @@ pub use indexmap::{IndexSet, indexset};
 use log::{debug, info, trace, warn};
 use rayon::prelude::*;
 pub use rgb::{RGB16, RGBA8};
+use tempfile::NamedTempFile;
 
 #[cfg(feature = "zopfli")]
 pub use crate::deflate::ZopfliOptions;
@@ -259,81 +260,55 @@ pub fn optimize(input: &InFile, output: &OutFile, opts: &Options) -> PngResult<(
                 .map(|p| p.as_path())
                 .unwrap_or_else(|| input.path().unwrap());
 
-            let temp_output_path = {
-                 let mut p = output_path.to_path_buf();
-                 let f = p.file_name().and_then(|s| s.to_str()).unwrap_or("tmp").to_owned();
-                 p.set_file_name(format!("{}.tmp", f));
-                 p
-            };
+            // Use a named temporary file in the same directory as output_path
+            // to ensure an atomic rename is possible across the same mount point.
+            let parent = output_path.parent().unwrap_or_else(|| std::path::Path::new("."));
 
-            // Attempt to prepare the temporary file for atomic write
-            let prepared_tmp_file = (|| -> Option<File> {
-                 // Delete the .tmp file first if it exists
-                 if let Err(e) = std::fs::remove_file(&temp_output_path) {
-                     if e.kind() != std::io::ErrorKind::NotFound {
-                         return None;
-                     }
-                 }
-                 // Try to open with O_EXCL (create_new)
-                 OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(&temp_output_path)
-                    .ok()
-            })();
+            match NamedTempFile::new_in(parent) {
+                Ok(tmp_file) => {
+                    // ATOMIC WRITE STRATEGY using tempfile
+                    if let Some(metadata_input) = &opt_metadata_preserved {
+                        copy_permissions(metadata_input, tmp_file.as_file())?;
+                    }
 
-            if let Some(out_file) = prepared_tmp_file {
-                // ATOMIC WRITE STRATEGY
-                if let Some(metadata_input) = &opt_metadata_preserved {
-                    copy_permissions(metadata_input, &out_file)?;
+                    {
+                        let mut buffer = BufWriter::new(tmp_file.as_file());
+                        buffer
+                            .write_all(&optimized_output)
+                            .map_err(|e| PngError::WriteFailed("temporary file".into(), e))?;
+
+                        buffer.flush()
+                            .map_err(|e| PngError::WriteFailed("temporary file flush".into(), e))?;
+                    }
+
+                    tmp_file.as_file().sync_all()
+                        .map_err(|e| PngError::WriteFailed("temporary file sync".into(), e))?;
+
+                    // Atomic rename over the original path
+                    tmp_file.persist(output_path)
+                        .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e.error))?;
+
+                    if let Some(metadata_input) = &opt_metadata_preserved {
+                        copy_times(metadata_input, output_path)?;
+                    }
                 }
+                Err(e) => {
+                    warn!("Failed to create temp file ({e}), falling back to in-place write");
+                    let out_file = File::create(output_path)
+                        .map_err(|err| PngError::WriteFailed(output_path.display().to_string(), err))?;
 
-                let mut buffer = BufWriter::new(out_file);
-                buffer
-                    .write_all(&optimized_output)
-                    .map_err(|e| PngError::WriteFailed(temp_output_path.display().to_string(), e))?;
+                    if let Some(metadata_input) = &opt_metadata_preserved {
+                        copy_permissions(metadata_input, &out_file)?;
+                    }
 
-                // flush BufWriter so IO errors don't get swallowed silently on close() by drop!
-                let out_file = buffer
-                    .into_inner()
-                    .map_err(|e| PngError::WriteFailed(temp_output_path.display().to_string(), e.into()))?;
+                    let mut buffer = BufWriter::new(out_file);
+                    buffer.write_all(&optimized_output)
+                        .and_then(|_| buffer.flush())
+                        .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e))?;
 
-                out_file
-                    .sync_all()
-                    .map_err(|e| PngError::WriteFailed(temp_output_path.display().to_string(), e))?;
-
-                // force drop and thereby closing of file handle before modifying any timestamp
-                std::mem::drop(out_file);
-
-                std::fs::rename(&temp_output_path, output_path)
-                    .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e))?;
-
-                if let Some(metadata_input) = &opt_metadata_preserved {
-                    copy_times(metadata_input, output_path)?;
-                }
-            } else {
-                // FALLBACK: IN-PLACE REPLACEMENT
-                // If we couldn't create/open the .tmp file (e.g., directory not writable),
-                // try replacing the file in-place like before.
-                let out_file = File::create(output_path)
-                    .map_err(|err| PngError::WriteFailed(output_path.display().to_string(), err))?;
-
-                if let Some(metadata_input) = &opt_metadata_preserved {
-                    copy_permissions(metadata_input, &out_file)?;
-                }
-
-                let mut buffer = BufWriter::new(out_file);
-                buffer
-                    .write_all(&optimized_output)
-                    // flush BufWriter so IO errors don't get swallowed silently on close() by drop!
-                    .and_then(|()| buffer.flush())
-                    .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e))?;
-
-                // force drop and thereby closing of file handle before modifying any timestamp
-                std::mem::drop(buffer);
-
-                if let Some(metadata_input) = &opt_metadata_preserved {
-                    copy_times(metadata_input, output_path)?;
+                    if let Some(metadata_input) = &opt_metadata_preserved {
+                        copy_times(metadata_input, output_path)?;
+                    }
                 }
             }
 
