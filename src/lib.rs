@@ -1,23 +1,4 @@
-#![warn(trivial_casts, trivial_numeric_casts, unused_import_braces)]
-#![deny(missing_debug_implementations, missing_copy_implementations)]
-#![warn(clippy::expl_impl_clone_on_copy)]
-#![warn(clippy::float_cmp_const)]
-#![warn(clippy::linkedlist)]
-#![warn(clippy::map_flatten)]
-#![warn(clippy::match_same_arms)]
-#![warn(clippy::mem_forget)]
-#![warn(clippy::mut_mut)]
-#![warn(clippy::mutex_integer)]
-#![warn(clippy::needless_continue)]
-#![warn(clippy::path_buf_push_overwrite)]
-#![warn(clippy::range_plus_one)]
-#![allow(clippy::cognitive_complexity)]
-#![allow(clippy::upper_case_acronyms)]
-#![cfg_attr(
-    not(feature = "zopfli"),
-    allow(irrefutable_let_patterns),
-    allow(unreachable_patterns)
-)]
+#![cfg_attr(not(feature = "zopfli"), allow(unreachable_patterns))]
 
 #[cfg(feature = "parallel")]
 extern crate rayon;
@@ -511,9 +492,9 @@ fn optimize_raw(
 
     let (result, deflater) = if opts.idat_recoding || reduction_occurred {
         let result = perform_trials(
-            new_image.clone(),
+            new_image,
             opts,
-            deadline.clone(),
+            deadline,
             max_size,
             eval_result,
             eval_filters,
@@ -559,7 +540,7 @@ fn perform_trials(
         if !filters.is_empty() {
             trace!("Evaluating {} filters", filters.len());
             let eval = Evaluator::new(
-                deadline.clone(),
+                deadline,
                 filters,
                 eval_deflater,
                 opts.optimize_alpha,
@@ -591,7 +572,7 @@ fn perform_trials(
                     trace!(">{bytes} bytes");
                 }
                 Err(_) => (),
-            };
+            }
         }
         return Some(result);
     }
@@ -721,7 +702,7 @@ fn recompress_frames(
 }
 
 /// Check if an image was already optimized prior to oxipng's operations
-fn is_fully_optimized(original_size: usize, optimized_size: usize, opts: &Options) -> bool {
+const fn is_fully_optimized(original_size: usize, optimized_size: usize, opts: &Options) -> bool {
     original_size <= optimized_size && !opts.force
 }
 
@@ -736,7 +717,7 @@ fn copy_permissions(metadata_input: &Metadata, out_file: &File) -> PngResult<()>
 }
 
 #[cfg(not(feature = "filetime"))]
-fn copy_times(_: &Metadata, _: &Path) -> PngResult<()> {
+const fn copy_times(_: &Metadata, _: &Path) -> PngResult<()> {
     Ok(())
 }
 

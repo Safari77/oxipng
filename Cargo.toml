@@ -20,7 +20,7 @@ homepage = "https://github.com/oxipng/oxipng"
 license = "MIT"
 name = "oxipng"
 repository = "https://github.com/oxipng/oxipng"
-version = "9.1.5"
+version = "10.0.0"
 rust-version = "1.85.1"
 
 [badges]
@@ -112,3 +112,37 @@ assets = [
     ["README.md", "usr/share/doc/oxipng/", "644"],
     ["CHANGELOG.md", "usr/share/doc/oxipng/", "644"],
 ]
+
+[lints.rust]
+missing_copy_implementations = "deny"
+missing_debug_implementations = "deny"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unused_import_braces = "warn"
+
+[lints.clippy]
+cloned_instead_of_copied = "warn"
+expl_impl_clone_on_copy = "warn"
+float_cmp_const = "warn"
+if_not_else = "warn"
+ignored_unit_patterns = "warn"
+linkedlist = "warn"
+manual_let_else = "warn"
+map_flatten = "warn"
+map_unwrap_or = "warn"
+match_same_arms = "warn"
+mem_forget = "warn"
+missing_const_for_fn = "warn"
+mut_mut = "warn"
+mutex_integer = "warn"
+needless_continue = "warn"
+option_if_let_else = "warn"
+path_buf_push_overwrite = "warn"
+range_plus_one = "warn"
+redundant_clone = "warn"
+redundant_closure_for_method_calls = "warn"
+semicolon_if_nothing_returned = "warn"
+unnecessary_semicolon = "warn"
+unseparated_literal_suffix = "warn"
+use_self = "warn"
+useless_let_if_seq = "warn"

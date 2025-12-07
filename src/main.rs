@@ -1,25 +1,15 @@
-#![warn(trivial_casts, trivial_numeric_casts, unused_import_braces)]
-#![deny(missing_debug_implementations, missing_copy_implementations)]
-#![warn(clippy::expl_impl_clone_on_copy)]
-#![warn(clippy::float_cmp_const)]
-#![warn(clippy::linkedlist)]
-#![warn(clippy::map_flatten)]
-#![warn(clippy::match_same_arms)]
-#![warn(clippy::mem_forget)]
-#![warn(clippy::mut_mut)]
-#![warn(clippy::mutex_integer)]
-#![warn(clippy::needless_continue)]
-#![warn(clippy::path_buf_push_overwrite)]
-#![warn(clippy::range_plus_one)]
-#![allow(clippy::cognitive_complexity)]
-
 #[cfg(not(feature = "parallel"))]
 mod rayon;
 
 #[cfg(feature = "zopfli")]
 use std::num::NonZeroU64;
 use std::{
-    ffi::OsString, fs::DirBuilder, io::Write, path::PathBuf, process::ExitCode, time::Duration,
+    ffi::{OsStr, OsString},
+    fs::DirBuilder,
+    io::Write,
+    path::PathBuf,
+    process::ExitCode,
+    time::Duration,
 };
 
 use clap::ArgMatches;
@@ -127,7 +117,7 @@ fn collect_files(
                 warn!("{} is a directory, skipping", input.display());
             }
             continue;
-        };
+        }
         let out_file =
             if let (Some(out_dir), &OutFile::Path { preserve_attrs, .. }) = (out_dir, out_file) {
                 let path = Some(out_dir.join(input.file_name().unwrap()));
@@ -143,7 +133,7 @@ fn collect_files(
         } else {
             // Skip non png files if not given on top level
             if !top_level && {
-                let extension = input.extension().map(|f| f.to_ascii_lowercase());
+                let extension = input.extension().map(OsStr::to_ascii_lowercase);
                 extension != Some(OsString::from("png"))
                     && extension != Some(OsString::from("apng"))
             } {
@@ -200,7 +190,7 @@ fn parse_opts_into_struct(
     };
 
     // Get custom brute settings and rebuild the filter set to apply them
-    let mut brute_lines = matches.get_one::<usize>("brute-lines").cloned();
+    let mut brute_lines = matches.get_one::<usize>("brute-lines").copied();
     let mut brute_level = matches.get_one::<i64>("brute-level").map(|x| *x as u8);
     let mut new_filters = IndexSet::new();
     for mut f in opts.filters.drain(..) {
@@ -243,7 +233,7 @@ fn parse_opts_into_struct(
             match DirBuilder::new().recursive(true).create(path) {
                 Ok(()) => (),
                 Err(x) => return Err(format!("Could not create output directory {x}")),
-            };
+            }
         } else if !path.is_dir() {
             return Err(format!(
                 "{} is an existing file (not a directory), cannot create directory",
