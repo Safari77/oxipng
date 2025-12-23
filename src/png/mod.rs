@@ -1,4 +1,4 @@
-use std::{fs, io::Write, path::Path, sync::Arc};
+use std::{fs, path::Path, sync::Arc};
 
 use bitvec::bitarr;
 use libdeflater::{CompressionLvl, Compressor};
@@ -7,7 +7,7 @@ use rgb::ComponentSlice;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Options,
+    Options, PngResult,
     apng::*,
     colors::{BitDepth, ColorType},
     deflate,
@@ -45,18 +45,18 @@ pub struct PngData {
 impl PngData {
     /// Create a new `PngData` struct by opening a file
     #[inline]
-    pub fn new(filepath: &Path, opts: &Options) -> Result<Self, PngError> {
+    pub fn new(filepath: &Path, opts: &Options) -> PngResult<Self> {
         let byte_data = Self::read_file(filepath)?;
 
         Self::from_slice(&byte_data, opts)
     }
 
-    pub fn read_file(filepath: &Path) -> Result<Vec<u8>, PngError> {
+    pub fn read_file(filepath: &Path) -> PngResult<Vec<u8>> {
         fs::read(filepath).map_err(|e| PngError::ReadFailed(filepath.display().to_string(), e))
     }
 
     /// Create a new `PngData` struct by reading a slice
-    pub fn from_slice(byte_data: &[u8], opts: &Options) -> Result<Self, PngError> {
+    pub fn from_slice(byte_data: &[u8], opts: &Options) -> PngResult<Self> {
         let mut byte_offset: usize = 0;
         // Test that png header is valid
         let header = byte_data.get(0..8).ok_or(PngError::TruncatedData)?;
@@ -165,17 +165,15 @@ impl PngData {
         let mut output = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
         // IHDR
         let mut ihdr_data = Vec::with_capacity(13);
-        ihdr_data.write_all(&self.raw.ihdr.width.to_be_bytes()).ok();
-        ihdr_data
-            .write_all(&self.raw.ihdr.height.to_be_bytes())
-            .ok();
-        ihdr_data.write_all(&[self.raw.ihdr.bit_depth as u8]).ok();
-        ihdr_data
-            .write_all(&[self.raw.ihdr.color_type.png_header_code()])
-            .ok();
-        ihdr_data.write_all(&[0]).ok(); // Compression -- deflate
-        ihdr_data.write_all(&[0]).ok(); // Filter method -- 5-way adaptive filtering
-        ihdr_data.write_all(&[self.raw.ihdr.interlaced as u8]).ok();
+        ihdr_data.extend_from_slice(&self.raw.ihdr.width.to_be_bytes());
+        ihdr_data.extend_from_slice(&self.raw.ihdr.height.to_be_bytes());
+        ihdr_data.extend_from_slice(&[self.raw.ihdr.bit_depth as u8]);
+        ihdr_data.extend_from_slice(&[
+            self.raw.ihdr.color_type.png_header_code(),
+            0, // Compression -- deflate
+            0, // Filter method -- 5-way adaptive filtering
+            self.raw.ihdr.interlaced as u8,
+        ]);
         write_png_block(b"IHDR", &ihdr_data, &mut output);
         // Ancillary chunks - split into those that come before IDAT and those that come after
         let mut aux_split = self.aux_chunks.split(|c| &c.name == b"IDAT");
@@ -250,7 +248,7 @@ impl PngData {
 }
 
 impl PngImage {
-    pub fn new(ihdr: IhdrData, compressed_data: &[u8]) -> Result<Self, PngError> {
+    pub fn new(ihdr: IhdrData, compressed_data: &[u8]) -> PngResult<Self> {
         let raw_data = deflate::inflate(compressed_data, ihdr.raw_data_size())?;
 
         // Reject files with incorrect width/height or truncated data
@@ -334,7 +332,7 @@ impl PngImage {
     }
 
     /// Reverse all filters applied on the image, returning an unfiltered IDAT bytestream
-    fn unfilter_image(&self) -> Result<Vec<u8>, PngError> {
+    fn unfilter_image(&self) -> PngResult<Vec<u8>> {
         let mut unfiltered = Vec::with_capacity(self.data.len());
         let bpp = self.bytes_per_channel() * self.channels_per_pixel();
         let mut last_line: Vec<u8> = Vec::new();
