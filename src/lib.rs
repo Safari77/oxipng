@@ -7,9 +7,8 @@ extern crate rayon;
 mod rayon;
 
 use std::{
-    fs::File,
     io::{stdin, stdout, BufWriter, Read, Write},
-    path::Path,
+    path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -252,68 +251,48 @@ pub fn optimize(input: &InFile, output: &OutFile, opts: &Options) -> Optimizatio
 
             let output_path = path
                 .as_ref()
-                .map(|p| p.as_path())
-                .unwrap_or_else(|| input.path().unwrap());
+                .map_or_else(|| input.path().unwrap(), PathBuf::as_path);
 
-            // Use a named temporary file in the same directory as output_path
-            // to ensure an atomic rename is possible across the same mount point.
-            let parent = output_path
+            let output_dir = output_path
                 .parent()
                 .unwrap_or_else(|| std::path::Path::new("."));
+            let mut temp_file = NamedTempFile::new_in(output_dir)
+                .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e))?;
 
-            match NamedTempFile::new_in(parent) {
-                Ok(tmp_file) => {
-                    // ATOMIC WRITE STRATEGY using tempfile
-                    if let Some(metadata_input) = &opt_metadata_preserved {
-                        copy_permissions(metadata_input, tmp_file.as_file())?;
-                    }
+            {
+                let mut buffer = BufWriter::new(&mut temp_file);
+                buffer
+                    .write_all(&optimized_output)
+                    // flush BufWriter so IO errors don't get swallowed silently on close() by drop!
+                    .and_then(|()| buffer.flush())
+                    .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e))?;
+            }
 
-                    {
-                        let mut buffer = BufWriter::new(tmp_file.as_file());
-                        buffer
-                            .write_all(&optimized_output)
-                            .map_err(|e| PngError::WriteFailed("temporary file".into(), e))?;
+            // fsync the temporary file before renaming
+            temp_file
+                .as_file()
+                .sync_all()
+                .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e))?;
 
-                        buffer
-                            .flush()
-                            .map_err(|e| PngError::WriteFailed("temporary file flush".into(), e))?;
-                    }
-
-                    tmp_file
-                        .as_file()
-                        .sync_all()
-                        .map_err(|e| PngError::WriteFailed("temporary file sync".into(), e))?;
-
-                    // Atomic rename over the original path
-                    tmp_file.persist(output_path).map_err(|e| {
-                        PngError::WriteFailed(output_path.display().to_string(), e.error)
-                    })?;
-
-                    if let Some(metadata_input) = &opt_metadata_preserved {
-                        copy_times(metadata_input, output_path)?;
-                    }
+            if let Some(metadata_input) = &input_metadata {
+                let set_time = metadata_input
+                    .modified()
+                    .and_then(|m| temp_file.as_file().set_modified(m));
+                if let Err(e) = set_time {
+                    warn!("Unable to set modification time on {output_path:?}: {e}");
                 }
-                Err(e) => {
-                    warn!("Failed to create temp file ({e}), falling back to in-place write");
-                    let out_file = File::create(output_path).map_err(|err| {
-                        PngError::WriteFailed(output_path.display().to_string(), err)
-                    })?;
-
-                    if let Some(metadata_input) = &opt_metadata_preserved {
-                        copy_permissions(metadata_input, &out_file)?;
-                    }
-
-                    let mut buffer = BufWriter::new(out_file);
-                    buffer
-                        .write_all(&optimized_output)
-                        .and_then(|_| buffer.flush())
-                        .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e))?;
-
-                    if let Some(metadata_input) = &opt_metadata_preserved {
-                        copy_times(metadata_input, output_path)?;
-                    }
+                let set_perm = temp_file
+                    .as_file()
+                    .set_permissions(metadata_input.permissions());
+                if let Err(e) = set_perm {
+                    warn!("Unable to set permissions on {output_path:?}: {e}");
                 }
             }
+
+            // Atomically replace the original file
+            temp_file
+                .persist(output_path)
+                .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e.error))?;
 
             info!("{}: {}", savings, output_path.display());
         }

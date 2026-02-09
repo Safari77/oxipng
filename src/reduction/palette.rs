@@ -4,7 +4,7 @@ use rgb::RGBA8;
 use crate::{
     colors::{BitDepth, ColorType},
     headers::IhdrData,
-    png::{PngImage, scan_lines::ScanLine},
+    png::{scan_lines::ScanLine, PngImage},
 };
 
 /// Attempt to reduce the number of colors in the palette, returning the reduced image if successful

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{ColorType, Deadline, Deflater, Options, evaluate::Evaluator, png::PngImage};
+use crate::{evaluate::Evaluator, png::PngImage, ColorType, Deadline, Deflater, Options};
 
 pub mod alpha;
 use crate::alpha::*;

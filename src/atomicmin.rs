@@ -15,7 +15,11 @@ impl AtomicMin {
 
     pub fn get(&self) -> Option<usize> {
         let val = self.val.load(SeqCst);
-        if val == usize::MAX { None } else { Some(val) }
+        if val == usize::MAX {
+            None
+        } else {
+            Some(val)
+        }
     }
 
     /// Try a new value, returning true if it is the new minimum

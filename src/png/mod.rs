@@ -7,7 +7,6 @@ use rgb::ComponentSlice;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Options, PngResult,
     apng::*,
     colors::{BitDepth, ColorType},
     deflate,
@@ -15,6 +14,7 @@ use crate::{
     filters::*,
     headers::*,
     interlace::{deinterlace_image, interlace_image},
+    Options, PngResult,
 };
 
 pub(crate) mod scan_lines;
