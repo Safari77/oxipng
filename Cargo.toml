@@ -20,7 +20,7 @@ homepage = "https://github.com/oxipng/oxipng"
 license = "MIT"
 name = "oxipng"
 repository = "https://github.com/oxipng/oxipng"
-version = "10.0.0"
+version = "10.1.0"
 rust-version = "1.85.1"
 
 [badges]
@@ -38,60 +38,34 @@ name = "zopfli"
 required-features = ["zopfli"]
 
 [dependencies]
-zopfli = { version = "0.8.3", optional = true, default-features = false, features = ["std", "zlib"] }
-rgb = "0.8.52"
-indexmap = "2.12.1"
+bitvec = "1.0.1"
+clap = { version = "4.5.56", optional = true, features = ["wrap_help"] }
+crossbeam-channel = { version = "0.5.15", optional = true }
+env_logger = { version = "0.11.8", optional = true, default-features = false, features = ["auto-color"] }
+image = { version = "0.25.9", optional = true, default-features = false, features = ["png"] }
+indexmap = "2.13.0"
 libdeflater = "1.25.0"
 log = "0.4.29"
-bitvec = "1.0.1"
+parse-size = { version = "1.1.0", optional = true }
+rayon = { version = "1.11.0", optional = true }
+rgb = "0.8.52"
 rustc-hash = "2.1.1"
 tempfile = "3"
+zopfli = { version = "0.8.3", optional = true, default-features = false, features = ["std", "zlib"] }
 
-[dependencies.env_logger]
-optional = true
-default-features = false
-features = ["auto-color"]
-version = "0.11.8"
+[target.'cfg(windows)'.dependencies]
+glob = { version = "0.3.3", optional = true }
 
-[dependencies.crossbeam-channel]
-optional = true
-version = "0.5.15"
-
-[dependencies.filetime]
-optional = true
-version = "0.2.26"
-
-[dependencies.rayon]
-optional = true
-version = "1.11.0"
-
-[dependencies.clap]
-optional = true
-version = "4.5.53"
-features = ["wrap_help"]
-
-[dependencies.parse-size]
-optional = true
-version = "1.1.0"
-
-[target.'cfg(windows)'.dependencies.glob]
-optional = true
-version = "0.3.3"
-
-[dependencies.image]
-optional = true
-default-features = false
-features = ["png"]
-version = "0.25.9"
+[dev-dependencies]
+serde_json = "1.0.149"
 
 [features]
 binary = ["dep:clap", "dep:glob", "dep:env_logger", "dep:parse-size"]
-default = ["binary", "parallel", "zopfli", "filetime"]
+default = ["binary", "parallel", "zopfli"]
 parallel = ["dep:rayon", "indexmap/rayon", "dep:crossbeam-channel"]
 freestanding = ["libdeflater/freestanding"]
 sanity-checks = ["dep:image"]
 zopfli = ["dep:zopfli"]
-filetime = ["dep:filetime"]
 system-libdeflate = ["libdeflater/dynamic"]
 
 [lib]

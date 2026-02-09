@@ -7,17 +7,17 @@ extern crate rayon;
 mod rayon;
 
 use std::{
-    fs::{File, Metadata},
-    io::{BufWriter, Read, Write, stdin, stdout},
+    fs::File,
+    io::{stdin, stdout, BufWriter, Read, Write},
     path::Path,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
     time::{Duration, Instant},
 };
 
-pub use indexmap::{IndexSet, indexset};
+pub use indexmap::{indexset, IndexSet};
 use log::{debug, info, trace, warn};
 use rayon::prelude::*;
 pub use rgb::{RGB16, RGBA8};
@@ -65,6 +65,7 @@ pub mod internal_tests {
 }
 
 pub type PngResult<T> = Result<T, PngError>;
+pub type OptimizationResult = PngResult<(usize, usize)>;
 
 #[derive(Debug)]
 /// A raw image definition which can be used to create an optimized png
@@ -166,40 +167,15 @@ impl RawImage {
 /// Perform optimization on the input file using the options provided
 ///
 /// Returns the original and optimized file sizes
-pub fn optimize(input: &InFile, output: &OutFile, opts: &Options) -> PngResult<(usize, usize)> {
+pub fn optimize(input: &InFile, output: &OutFile, opts: &Options) -> OptimizationResult {
     // Read in the file and try to decode as PNG.
     info!("Processing: {input}");
 
     let deadline = Arc::new(Deadline::new(opts.timeout));
 
-    // grab metadata before even opening input file to preserve atime
-    let opt_metadata_preserved;
     let in_data = match *input {
-        InFile::Path(ref input_path) => {
-            if matches!(
-                output,
-                OutFile::Path {
-                    preserve_attrs: true,
-                    ..
-                }
-            ) {
-                opt_metadata_preserved = input_path
-                    .metadata()
-                    .map_err(|err| {
-                        // Fail if metadata cannot be preserved
-                        PngError::new(&format!(
-                            "Unable to read metadata from input file {input_path:?}: {err}"
-                        ))
-                    })
-                    .map(Some)?;
-                trace!("preserving metadata: {opt_metadata_preserved:?}");
-            } else {
-                opt_metadata_preserved = None;
-            }
-            PngData::read_file(input_path)?
-        }
+        InFile::Path(ref input_path) => PngData::read_file(input_path)?,
         InFile::StdIn => {
-            opt_metadata_preserved = None;
             let mut data = Vec::new();
             stdin()
                 .read_to_end(&mut data)
@@ -221,7 +197,7 @@ pub fn optimize(input: &InFile, output: &OutFile, opts: &Options) -> PngResult<(
             (OutFile::Path { path, .. }, InFile::Path(input_path))
                 if path.as_ref().is_none_or(|p| p == input_path) =>
             {
-                info!("{input}: Could not optimize further, no change written");
+                info!("Could not optimize further, no change written: {input}");
                 return Ok((in_length, in_length));
             }
             _ => {
@@ -253,8 +229,27 @@ pub fn optimize(input: &InFile, output: &OutFile, opts: &Options) -> PngResult<(
             buffer
                 .write_all(&optimized_output)
                 .map_err(|e| PngError::WriteFailed("stdout".into(), e))?;
+            info!("{savings}: stdout");
         }
-        (OutFile::Path { path, .. }, _) => {
+        (
+            OutFile::Path {
+                path,
+                preserve_attrs,
+            },
+            _,
+        ) => {
+            let input_metadata = if *preserve_attrs {
+                input.path().and_then(|in_path| {
+                    let meta = in_path.metadata();
+                    if let Err(e) = &meta {
+                        warn!("Unable to read metadata from {in_path:?}: {e}");
+                    }
+                    meta.ok()
+                })
+            } else {
+                None
+            };
+
             let output_path = path
                 .as_ref()
                 .map(|p| p.as_path())
@@ -262,7 +257,9 @@ pub fn optimize(input: &InFile, output: &OutFile, opts: &Options) -> PngResult<(
 
             // Use a named temporary file in the same directory as output_path
             // to ensure an atomic rename is possible across the same mount point.
-            let parent = output_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+            let parent = output_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."));
 
             match NamedTempFile::new_in(parent) {
                 Ok(tmp_file) => {
@@ -277,16 +274,20 @@ pub fn optimize(input: &InFile, output: &OutFile, opts: &Options) -> PngResult<(
                             .write_all(&optimized_output)
                             .map_err(|e| PngError::WriteFailed("temporary file".into(), e))?;
 
-                        buffer.flush()
+                        buffer
+                            .flush()
                             .map_err(|e| PngError::WriteFailed("temporary file flush".into(), e))?;
                     }
 
-                    tmp_file.as_file().sync_all()
+                    tmp_file
+                        .as_file()
+                        .sync_all()
                         .map_err(|e| PngError::WriteFailed("temporary file sync".into(), e))?;
 
                     // Atomic rename over the original path
-                    tmp_file.persist(output_path)
-                        .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e.error))?;
+                    tmp_file.persist(output_path).map_err(|e| {
+                        PngError::WriteFailed(output_path.display().to_string(), e.error)
+                    })?;
 
                     if let Some(metadata_input) = &opt_metadata_preserved {
                         copy_times(metadata_input, output_path)?;
@@ -294,15 +295,17 @@ pub fn optimize(input: &InFile, output: &OutFile, opts: &Options) -> PngResult<(
                 }
                 Err(e) => {
                     warn!("Failed to create temp file ({e}), falling back to in-place write");
-                    let out_file = File::create(output_path)
-                        .map_err(|err| PngError::WriteFailed(output_path.display().to_string(), err))?;
+                    let out_file = File::create(output_path).map_err(|err| {
+                        PngError::WriteFailed(output_path.display().to_string(), err)
+                    })?;
 
                     if let Some(metadata_input) = &opt_metadata_preserved {
                         copy_permissions(metadata_input, &out_file)?;
                     }
 
                     let mut buffer = BufWriter::new(out_file);
-                    buffer.write_all(&optimized_output)
+                    buffer
+                        .write_all(&optimized_output)
                         .and_then(|_| buffer.flush())
                         .map_err(|e| PngError::WriteFailed(output_path.display().to_string(), e))?;
 
@@ -679,30 +682,4 @@ fn recompress_frames(
 /// Check if an image was already optimized prior to oxipng's operations
 const fn is_fully_optimized(original_size: usize, optimized_size: usize, opts: &Options) -> bool {
     original_size <= optimized_size && !opts.force
-}
-
-fn copy_permissions(metadata_input: &Metadata, out_file: &File) -> PngResult<()> {
-    out_file
-        .set_permissions(metadata_input.permissions())
-        .map_err(|err_io| {
-            PngError::new(&format!(
-                "Unable to set permissions for output file: {err_io}"
-            ))
-        })
-}
-
-#[cfg(not(feature = "filetime"))]
-const fn copy_times(_: &Metadata, _: &Path) -> PngResult<()> {
-    Ok(())
-}
-
-#[cfg(feature = "filetime")]
-fn copy_times(input_path_meta: &Metadata, out_path: &Path) -> PngResult<()> {
-    let mtime = filetime::FileTime::from_last_modification_time(input_path_meta);
-    trace!("attempting to set file modification time: {mtime:?}");
-    filetime::set_file_mtime(out_path, mtime).map_err(|err_io| {
-        PngError::new(&format!(
-            "Unable to set file times on {out_path:?}: {err_io}"
-        ))
-    })
 }
