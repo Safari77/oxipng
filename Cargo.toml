@@ -21,7 +21,7 @@ license = "MIT"
 name = "oxipng"
 repository = "https://github.com/oxipng/oxipng"
 version = "10.1.0"
-rust-version = "1.85.1"
+rust-version = "1.93"
 
 [badges]
 travis-ci = { repository = "oxipng/oxipng", branch = "master" }
@@ -77,7 +77,7 @@ opt-level = 2
 
 [profile.release]
 lto = "fat"
-strip = "symbols"
+debug = true
 panic = "abort"
 
 [package.metadata.deb]
