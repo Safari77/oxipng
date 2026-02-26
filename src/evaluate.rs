@@ -8,12 +8,12 @@ use std::sync::{
     Arc,
 };
 
-#[cfg(feature = "parallel")]
-use crossbeam_channel::{unbounded, Receiver, Sender};
 use deflate::Deflater;
 use indexmap::IndexSet;
 use log::trace;
 use rayon::prelude::*;
+#[cfg(feature = "parallel")]
+use std::sync::mpsc::{channel, Receiver, Sender};
 
 #[cfg(not(feature = "parallel"))]
 use crate::rayon;
@@ -73,7 +73,7 @@ impl Evaluator {
         final_round: bool,
     ) -> Self {
         #[cfg(feature = "parallel")]
-        let eval_channel = unbounded();
+        let eval_channel = channel();
         Self {
             deadline,
             filters,
