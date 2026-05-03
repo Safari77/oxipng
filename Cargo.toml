@@ -21,7 +21,6 @@ license = "MIT"
 name = "oxipng"
 repository = "https://github.com/oxipng/oxipng"
 version = "10.1.1"
-rust-version = "1.85.1"
 
 [badges]
 travis-ci = { repository = "oxipng/oxipng", branch = "master" }
@@ -49,6 +48,7 @@ parse-size = { version = "1.1.0", optional = true }
 rayon = { version = "1.11.0", optional = true }
 rgb = "0.8.53"
 rustc-hash = "2.1.2"
+tempfile = "3.27"
 zopfli = { version = "0.8.3", optional = true, default-features = false, features = ["std", "zlib"] }
 
 [target.'cfg(windows)'.dependencies]
