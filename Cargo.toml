@@ -20,8 +20,8 @@ homepage = "https://github.com/oxipng/oxipng"
 license = "MIT"
 name = "oxipng"
 repository = "https://github.com/oxipng/oxipng"
-version = "10.1.0"
-rust-version = "1.93"
+version = "10.1.1"
+rust-version = "1.85.1"
 
 [badges]
 travis-ci = { repository = "oxipng/oxipng", branch = "master" }
@@ -39,24 +39,23 @@ required-features = ["zopfli"]
 
 [dependencies]
 bitvec = "1.0.1"
-clap = { version = "4", optional = true, features = ["wrap_help"] }
-env_logger = { version = "0.11", optional = true, default-features = false, features = ["auto-color"] }
+clap = { version = "4.6.0", optional = true, features = ["wrap_help"] }
+env_logger = { version = "0.11.10", optional = true, default-features = false, features = ["auto-color"] }
 image = { version = "0.25.9", optional = true, default-features = false, features = ["png"] }
-indexmap = "2.14"
-libdeflater = "1.25"
-log = "0.4"
-parse-size = { version = "1", optional = true }
-rayon = { version = "1", optional = true }
-rgb = "0.8"
-rustc-hash = "2"
-tempfile = "3"
-zopfli = { version = "0.8", optional = true, default-features = false, features = ["std", "zlib"] }
+indexmap = "2.14.0"
+libdeflater = "1.25.2"
+log = "0.4.29"
+parse-size = { version = "1.1.0", optional = true }
+rayon = { version = "1.11.0", optional = true }
+rgb = "0.8.53"
+rustc-hash = "2.1.2"
+zopfli = { version = "0.8.3", optional = true, default-features = false, features = ["std", "zlib"] }
 
 [target.'cfg(windows)'.dependencies]
 glob = { version = "0.3.3", optional = true }
 
 [dev-dependencies]
-serde_json = "1.0"
+serde_json = "1.0.149"
 
 [features]
 binary = ["dep:clap", "dep:glob", "dep:env_logger", "dep:parse-size"]
@@ -76,7 +75,7 @@ opt-level = 2
 
 [profile.release]
 lto = "fat"
-debug = true
+strip = "symbols"
 panic = "abort"
 
 [package.metadata.deb]
