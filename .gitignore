@@ -1,8 +1,8 @@
-target
-*.bk
 .DS_Store
+*.bk
 *.out.png
-/.idea
-/node_modules
+/.idea/
+/node_modules/
+/target/
 *~
 .*.sw?

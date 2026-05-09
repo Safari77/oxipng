@@ -3,7 +3,12 @@ name: deploy
 on:
   push:
     tags:
-      - "v*.*.*"
+      - v*.*.*
+
+concurrency:
+  # If we ever end up with two concurrent jobs for releasing the same tag, the former should be cancelled
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   actions: read
@@ -54,15 +59,15 @@ jobs:
 
       - name: Get the Oxipng version
         id: oxipngMeta
-        run:
-          echo "version=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.name == "oxipng").version')"
-          >> "$GITHUB_OUTPUT"
+        run: >
+          echo "version=$(cargo metadata --format-version 1 --no-deps |
+          jq -r '.packages[] | select(.name == "oxipng").version')" >> "$GITHUB_OUTPUT"
 
       - name: Retrieve ${{ matrix.target }} binary
-        uses: dawidd6/action-download-artifact@v20
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: oxipng.yml
-          commit: ${{ env.GITHUB_SHA }}
+          commit: ${{ github.sha }}
           name: Oxipng binary (${{ matrix.target }})
           path: target
 

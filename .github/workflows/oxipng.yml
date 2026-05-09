@@ -8,6 +8,11 @@ on:
       - synchronize
   workflow_dispatch:
 
+concurrency:
+  # If we ever end up with two concurrent CI jobs for the same commit, the former should be cancelled
+  group: ci-${{ github.sha }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     name: CI
@@ -126,7 +131,7 @@ jobs:
       - name: Build CLI binary
         run: cargo build --release -Zbuild-std
         env:
-          RUSTFLAGS: '-Zlocation-detail=none -Zunstable-options -Cpanic=immediate-abort'
+          RUSTFLAGS: "-Zlocation-detail=none -Zunstable-options -Cpanic=immediate-abort"
 
       - name: Upload CLI binary as artifact
         uses: actions/upload-artifact@v7
