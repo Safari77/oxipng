@@ -3,6 +3,7 @@ use rustc_hash::FxHashMap;
 use std::{fs, path::Path, sync::Arc};
 
 use crate::{
+    Options, PngResult,
     apng::*,
     colors::{BitDepth, ColorType},
     deflate,
