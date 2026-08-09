@@ -4,5 +4,9 @@
 /.idea/
 /node_modules/
 /target/
+<<<<<<< HEAD
 *~
 .*.sw?
+=======
+/xtask/target
+>>>>>>> upstream/master
