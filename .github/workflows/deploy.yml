@@ -49,7 +49,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
           toolchain: nightly
           # Nothing is compiled here, so the cache is dead weight and a poisoning vector
@@ -57,7 +57,7 @@ jobs:
 
       - name: Install cargo-deb
         if: endsWith(matrix.target, '-linux-gnu')
-        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
           tool: cargo-deb
 
@@ -68,7 +68,7 @@ jobs:
           jq -r '.packages[] | select(.name == "oxipng").version')" >> "$GITHUB_OUTPUT"
 
       - name: Retrieve ${{ matrix.target }} binary
-        uses: dawidd6/action-download-artifact@d63b86af1b34672e53c440b1b83979861906bad7 # v24
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477 # v27
         with:
           workflow: oxipng.yml
           commit: ${{ github.sha }}
